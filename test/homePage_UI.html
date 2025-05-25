@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Job Recommendation System</title>
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #f4f6fb; color: #222; }
+    h1 { text-align: center; margin-top: 2rem; color: #0078d4; letter-spacing: 1px; }
+    .container { display: flex; gap: 2rem; max-width: 1100px; margin: 2rem auto 0 auto; }
+    .panel { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.07); border-radius: 12px; padding: 2rem 1.5rem; }
+    .user-panel { flex: 0 0 450px; }
+    .job-panel { flex: 1; }
+    .panel h2 { margin-top: 0; color: #0078d4; font-size: 1.2rem; margin-bottom: 1rem; }
+    select { width: 100%; padding: 0.7rem; margin-bottom: 1.2rem; border-radius: 6px; border: 1px solid #cfd8dc; background: #f7fafc; font-size: 1rem; }
+    #userProfile { background: #f7fafc; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; font-size: 1rem; color: #444; border: 1px solid #e3e8ee; }
+    .job-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+    .job-card { background: #fff; border: 1px solid #e3e8ee; border-radius: 8px; padding: 1rem; cursor: pointer; transition: box-shadow 0.3s; }
+    .job-card:hover { box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    .job-card h3 { color: #0078d4; margin: 0 0 0.5rem; }
+    .job-card p { margin: 0.2rem 0; color: #555; }
+    .job-card .detail-link { color: #0078d4; text-decoration: none; font-weight: bold; }
+    .job-card .detail-link:hover { text-decoration: underline; }
+    @media (max-width: 900px) { .container { flex-direction: column; max-width: 98vw; } .user-panel { flex: 1; } }
+  </style>
+</head>
+<body>
+  <h1>Job Recommendation System</h1>
+  <div class="container">
+    <div class="panel user-panel">
+      <h2>Select User</h2>
+      <select id="userSelect">
+        <option value="">-- Select a user --</option>
+      </select>
+      <div id="userProfile"></div>
+    </div>
+    <div class="panel job-panel">
+      <h2>Recommended Jobs</h2>
+      <div id="jobList" class="job-list"></div>
+    </div>
+  </div>
+  <script>
+    let users = [];
+    let jobs = [];
+
+    function renderUserProfile(user) {
+      let html = '<div class="user-profile">';
+      let skillsHtml = '';
+      let otherHtml = '';
+      for (const key in user) {
+        if (user.hasOwnProperty(key) && key.toUpperCase().indexOf('ID') === -1 && key.toUpperCase().indexOf('URL') === -1 && user[key] !== '') {
+          const lowerKey = key.toLowerCase();
+          if (lowerKey.includes('skill')) {
+            skillsHtml += `<strong>${key}:</strong> ${user[key]}<br>`;
+          } else {
+            otherHtml += `<strong>${key}:</strong> ${user[key]}<br>`;
+          }
+        }
+      }
+      html += otherHtml;
+      if (skillsHtml) {
+        html += `<div class="collapsible-field"><button class="toggle-btn" onclick="toggleContent(this)">▼ Skills</button><div class="content" style="display:none;">${skillsHtml}</div></div>`;
+      }
+      html += '</div>';
+      return html;
+    }
+
+    function renderJobCard(job) {
+      return `
+        <div class="job-card" onclick="showJobDetail('${job['JobID']}')">
+          <h3>${job['Job Title']}</h3>
+          <p><strong>Company:</strong> ${job['Name Company']}</p>
+          <p><strong>Level:</strong> ${job['Career Level']}</p>
+          <p><strong>Salary:</strong> ${job['Salary'] || 'Not specified'}</p>
+          <p><strong>Location:</strong> ${job['Job Address']}</p>
+          <a href="#" class="detail-link">View Details</a>
+        </div>
+      `;
+    }
+
+    function showJobDetail(jobId) {
+      window.location.href = `job_detail.html?job_id=${jobId}`;
+    }
+
+    function toggleContent(button) {
+      const content = button.nextElementSibling;
+      const isVisible = content.style.display === 'block';
+      content.style.display = isVisible ? 'none' : 'block';
+      button.innerHTML = isVisible ? '▼ Skills' : '▲ Skills';
+    }
+
+    function populateUserSelect() {
+      const select = $('#userSelect');
+      select.empty().append('<option value="">-- Select a user --</option>');
+      users.forEach((u, i) => {
+        select.append(`<option value="${i}">${u['User Name']}</option>`);
+      });
+      select.select2({ placeholder: '-- Select a user --', allowClear: true, width: '100%' })
+        .on('change', function () {
+          const idx = $(this).val();
+          $('#userProfile').html(idx !== "" ? renderUserProfile(users[idx]) : '');
+          if (idx !== "") {
+          fetch('http://localhost:5000/recommend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_index: idx, top_n: 5 })
+              })
+              .then(response => {
+                if (!response.ok) {
+                  throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+              })
+              .then(data => {
+                if (data.error) {
+                  $('#jobList').html(`<em>${data.error}</em>`);
+                } else {
+                  jobs = data.recommended_jobs;
+                  $('#jobList').html(jobs.map(job => renderJobCard(job)).join(''));
+                }
+              })
+              .catch(error => {
+                console.error('Error fetching recommendations:', error);
+                $('#jobList').html(`<em>Lỗi khi tải công việc đề xuất. Chi tiết: ${error.message}</em>`);
+              });
+          } else {
+            $('#jobList').html('');
+          }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      fetch('USER_DATA_FINAL.csv')
+        .then(response => response.text())
+        .then(userCsvText => {
+          Papa.parse(userCsvText, { header: true, complete: results => {
+            users = results.data.filter(u => u['UserID']);
+            populateUserSelect();
+          }});
+        });
+    });
+  </script>
+</body>
+</html>
