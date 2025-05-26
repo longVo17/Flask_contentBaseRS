@@ -52,26 +52,29 @@ function populateUserSelect() {
   });
 }
 
-// Display user profile
 function displayUserProfile(user) {
   const profileDiv = document.getElementById('userProfile');
   const contentDiv = document.getElementById('profileContent');
 
   let html = '';
   Object.keys(user).forEach(key => {
-    if (user[key] && user[key].trim() &&
-        !key.toLowerCase().includes('id') &&
-        !key.toLowerCase().includes('url')) {
-      html += `<div class="profile-item">
-        <strong>${key}:</strong> ${user[key]}
-      </div>`;
+    if (user[key] && user[key].trim() && !key.toLowerCase().includes('id')) {
+      if (key === 'URL User') {
+        // Hiển thị URL User dưới dạng liên kết
+        html += `<div class="profile-item">
+          <strong>${key}:</strong> <a href="${user[key]}" target="_blank" rel="noopener">${user[key]}</a>
+        </div>`;
+      } else {
+        html += `<div class="profile-item">
+          <strong>${key}:</strong> ${user[key]}
+        </div>`;
+      }
     }
   });
 
   contentDiv.innerHTML = html;
   profileDiv.style.display = 'block';
 }
-
 // Show CV creator section
 function showCVCreator() {
   document.getElementById('welcomeSection').style.display = 'none';
